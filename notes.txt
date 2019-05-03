@@ -1,0 +1,5 @@
+image = [[ 1 for i in range(50)] for j in range(50)] # 2d array of all ones
+image[:25][:25] # top left quad
+image[:25]
+
+

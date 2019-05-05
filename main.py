@@ -14,7 +14,7 @@ class Lanes:
   calEngine = CamCal('camera_cal')
 
   # load images or video
-  useTestImages = False
+  useTestImages = True
   # videoName = "challenge_video.mp4"
   videoName = "project_video.mp4"
   staticImages = []
@@ -75,10 +75,6 @@ class Lanes:
     left_y_eval = np.max(lefty)
     right_y_eval = np.max(righty)
 
-    left_curverad = ((1 + (2 * leftx[0] * left_y_eval + leftx[1]) ** 2) ** 1.5) / np.absolute(2 * leftx[0])
-    right_curverad = ((1 + (2 * rightx[0] * right_y_eval + rightx[1]) ** 2) ** 1.5) / np.absolute(2 * rightx[0])
-    print("left curv:"+str(left_curverad)+"px right curv:"+str(right_curverad)+"px")
-
 
     # create return image with alpha channel
     # b_channel, g_channel, r_channel = cv2.split(warped)
@@ -115,6 +111,12 @@ class Lanes:
     right_fit[1] = sum(self.rightAveragePolyB)/len(self.rightAveragePolyB)
     right_fit[2] = sum(self.rightAveragePolyC)/len(self.rightAveragePolyC)
 
+    y_eval_left = int(np.max(left_y_eval)/2)
+    y_eval_right = int(np.max(right_y_eval)/2)
+    left_curverad = ((1 + (2*left_fit[0]*y_eval_left + left_fit[1])**2)**1.5) / np.absolute(2*left_fit[0])
+    right_curverad = ((1 + (2*right_fit[0]*y_eval_right + right_fit[1])**2)**1.5) / np.absolute(2*right_fit[0])
+    print("left curv:"+str(left_curverad)+"px right curv:"+str(right_curverad)+"px")
+
     # Generate x and y values for plotting
     ploty = np.linspace(0, binary_warped.shape[0] - 1, binary_warped.shape[0])
     # print("ploty")
@@ -128,6 +130,19 @@ class Lanes:
       left_fitx = 1 * ploty ** 2 + 1 * ploty
       right_fitx = 1 * ploty ** 2 + 1 * ploty
 
+    height, width = warped.shape[:2]
+    middle = width/2
+    lane_width = right_fitx[-1] - left_fitx[-1]
+    xm_per_pix = 3.7 / lane_width
+    leftLineFromCenter = middle-left_fitx[-1]
+    pixelsFromCenter = laneWidth/2 - leftLineFromCenter
+    metersLeftOfCenter = pixelsFromCenter*xm_per_pix
+    centerString = "Deviation: "+str(round(metersLeftOfCenter, 2))+"m"
+    leftCurvInMeters = left_curverad*xm_per_pix
+    rightCurvInMeters = right_curverad*xm_per_pix
+    leftCurvString = "Left curvature: "+str(round(leftCurvInMeters/xm_per_pix, 2))+"m"
+    rightCurvString = "Right curvature: "+str(round(rightCurvInMeters/xm_per_pix, 2))+"m"
+
     ## Visualization ##
     # Colors in the left and right lane regions
     out_img[lefty, leftx] = [255, 0, 0]
@@ -140,10 +155,11 @@ class Lanes:
     for y in ploty:
       # print("y="+str(y)+" x="+str(left_fitx[int(y)]))
       radius = 10
-      cv2.circle(returnImage, (int(left_fitx[int(y)]), int(y)), radius, (0, 255, 0, 255))
-      cv2.circle(returnImage, (int(right_fitx[int(y)]), int(y)), radius, (0, 255, 0, 255))
+      # cv2.circle(returnImage, (int(left_fitx[int(y)]), int(y)), radius, (0, 255, 0, 255))
+      # cv2.circle(returnImage, (int(right_fitx[int(y)]), int(y)), radius, (0, 255, 0, 255))
+      cv2.line(returnImage, (int(right_fitx[int(y)]), int(y)), (int(left_fitx[int(y)]), int(y)), (0, 255, 0, 180), 1)
 
-    return out_img, returnImage, laneWidth
+    return out_img, returnImage, laneWidth, centerString, leftCurvString, rightCurvString
 
   def find_lane_pixels(self, binary_warped):
     laneWidthSum = 0
@@ -298,12 +314,15 @@ class Lanes:
       # determine the curvature and possition
       hist = self.hist(binary_warped)
       # plt.plot(hist)
-      out_img, overlay, laneWidth = self.fit_polynomial(binary_warped, warped)
+      out_img, overlay, laneWidth, centerString, rightString, leftString = self.fit_polynomial(binary_warped, warped)
 
       # re-warp the image back
       overlay = p.unWarpImage(overlay)
-      finalImage = cv2.addWeighted(frame, 0.8, overlay, 1.0, 0.0)
+      finalImage = cv2.addWeighted(frame, 0.8, overlay, 0.3, 0.0)
       font = cv2.FONT_HERSHEY_SIMPLEX
+      cv2.putText(finalImage, centerString, (50, 50), font, 1, (255, 255, 255), 2, cv2.LINE_AA)
+      cv2.putText(finalImage, rightString, (50, 100), font, 1, (255, 255, 255), 2, cv2.LINE_AA)
+      cv2.putText(finalImage, leftString, (50, 150), font, 1, (255, 255, 255), 2, cv2.LINE_AA)
       # cv2.putText(finalImage, 'LaneWidth: '+str(laneWidth)+' cm', (50, 50), font, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
       # write possition data back on to screen
@@ -313,7 +332,7 @@ class Lanes:
       if self.useTestImages == False:
         #frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         cv2.imshow('color', finalImage)
-        cv2.imshow('birdseye', warped)
+        #cv2.imshow('birdseye', warped)
         cv2.waitKey(1)
         self.out.write(finalImage)
       else:
